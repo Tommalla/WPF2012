@@ -1,0 +1,182 @@
+(* Tomasz Zakrzewski, numer indeksu: 336079, Projekt: Modyfikacja Drzew *)
+
+(* Compare do porównywania przedziałów: zwróci -1 lub 1 dla przedziałów rozłącznych, 0 dla niepustego przecięcia *)
+let cmp (xb, xe) (yb, ye) =
+	if xe < yb then
+		-1
+	else if ye < xb then
+		1
+	else
+		0
+
+(* Przecięcie przedziałów *)
+let intersect (xb, xe) (yb, ye) =
+	(max xb yb, min xe ye)
+
+let isCorrect (b, e) =
+	b <= e
+
+let same (xb, xe) (yb, ye) =
+	(xb = yb) && (xe = ye)
+	
+(*(* Zwraca listę max 2 przedziałów powstałych po odjęciu od przedziału x przedziału y *)
+let diff (xb, xe) (yb, ye) =
+	let res = (ref []) in
+		begin
+			if xe > ye && xe >= yb then	(* Powstały lewy przedział *)
+				res := (ye + 1, xe)::(!res);
+			if xb < yb && xe >= yb then	(* Prawy *)
+				res := (xb, yb - 1)::(!res);
+		end;
+		!res*)
+
+let leftDiff (xb, xe) (yb, ye) =
+	(min xb yb, max (xb - 1) (yb - 1))
+
+let rightDiff (xb, xe) (yb, ye) =
+	(min (xe + 1) (ye + 1), max xe ye)
+			
+type set =
+	| Empty
+	| Node of set * (int * int) * set * int
+
+let is_empty x =
+	x = Empty
+
+let height =
+	function
+		| Node (_, _, _, h) -> h
+		| Empty -> 0
+
+let make l v r =
+	Node (l, v, r, max (height l) (height r) + 1)
+
+(* Zwraca najwyższy węzeł zawierający x *)	
+let rec find x s =
+	match s with
+	| Node (l, v, r, h) ->
+		let c = cmp x v in
+			if c = 0 then	(* Niepuste przecięcie *)
+				s
+			else if c < 0 then
+				find x l
+			else
+				find x r
+	| Empty -> Empty
+		
+let bal l v r =
+	let hl = height l 
+	and hr = height r in
+		if hl > hr + 2 then
+			match l with
+			| Node (ll, lv, lr, _) ->
+				if height ll >= height lr then make ll lv (make lr v r)
+				else
+					(match lr with
+					| Node (lrl, lrv, lrr, _) ->
+						make (make ll lv lrl) lrv (make lrr v r)
+					| Empty -> assert false)
+			| Empty -> assert false
+		else if hr > hl + 2 then
+			match r with
+			| Node (rl, rv, rr, _) ->
+				if height rr >= height rl then make (make l v rl) rv rr
+				else
+					(match rl with
+					| Node (rll, rlv, rlr, _) ->
+						make (make l v rll) rlv (make rlr rv rr)
+					| Empty -> assert false)
+			| Empty -> assert false
+		else Node (l, v, r, max hl hr + 1)
+
+let mem x s =
+	let rec loop =
+		function
+		| Node (l, v, r, _) ->
+			let c = cmp x v in
+				c = 0 || loop (if c < 0 then l else r)
+		| Empty -> false
+	in loop s
+
+let lChild v =
+	match v with
+	| Empty -> Empty
+	| Node (l, _, _, _) -> l
+
+let rChild v =
+	match v with
+	| Empty -> Empty
+	| Node (_, _, r, _) -> r
+
+let rec removeLeft x s b =
+	match s with
+	| Node (l, v, r, h) ->
+		let c = cmp x v
+		and (xb, xe) = x
+		and (vb, ve) = v
+		in
+			if c = 0 then	(* Niepuste przecięcie *)
+				removeLeft x l (min b vb)
+			else if c < 0 then
+				let (nl, b) = removeLeft x l b in
+					(bal nl v r, b)
+			else
+				let (nr, b) = removeLeft x r b in
+					(bal l v nr, b)
+	| Empty -> (Empty, b)
+
+let rec removeRight x s e =
+	match s with
+	| Node (l, v, r, h) ->
+		let c = cmp x v
+		and (xb, xe) = x
+		and (vb, ve) = v
+		in
+			if c = 0 then	(* Niepuste przecięcie *)
+				removeRight x r (max e ve)
+			else if c < 0 then
+				let (nl, e) = removeRight x l e in
+					(bal nl v r, e)
+			else
+				let (nr, e) = removeRight x r e in
+					(bal l v nr, e)
+	| Empty -> (Empty, e)
+	
+let rec add x s =
+	match s with
+	| Node (l, v, r, h) ->
+		let c = cmp x v in
+			if c = 0 then	(* Niepuste przecięcie *)
+				let (xb, xe) = x
+				and (vb, ve) = v in
+					if same x v then (* pokryły się idealnie *)
+						s
+					else
+						let (nl, b) = removeLeft x l vb
+						and (nr, e) = removeRight x r ve in
+							bal nl (min b xb, max e xe) nr
+			else if c < 0 then
+				let nl = add x l in
+					bal nl v r
+			else
+				let nr = add x r in
+					bal l v nr
+	| Empty -> Node (Empty, x, Empty, 1)
+
+let mem x s =
+	let rec loop s =
+		match s with
+		| Empty -> false
+		| Node (l, v, r, _) ->
+			let c = cmp (x, x) v in
+				c = 0 || (if c < 0 then loop l else loop r)
+	in loop s
+
+let elements s =
+	let rec loop s res =
+		match s with
+		| Empty -> res
+		| Node(l, v, r, _) ->
+			loop l (v::(loop r res))
+	in loop s []
+;; (* Łykaj OCamlu! *)
